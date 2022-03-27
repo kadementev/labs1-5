@@ -1083,3 +1083,261 @@ public:
 
 
 
+
+
+
+
+
+
+
+class PCA{
+protected:
+public:
+    Matrix X;
+    Matrix T;
+    Matrix P;
+    Matrix E;
+    int components = 0;
+    friend class Matrix;
+    friend class Vector;
+    PCA(Matrix A, int a) {
+        X = Matrix(A.values);
+        E = X;
+        components = a;
+    }
+
+
+    double m(int j) {
+        double sum = 0;
+
+        for (int i = 0; i < X.stroks(); i++) {
+            sum += X.cell(i, j);
+        }
+
+        return sum / X.stroks();
+    }
+
+
+
+    void center() {
+        for (int i = 0; i < E.stlbs(); i++) {
+            
+            double sum = m(i);
+            
+            for (int j = 0; j < E.stroks(); j++) {
+                E.cell(j ,i) = E.print(j, i) - sum;
+            }
+         
+        
+        }
+        
+
+    }
+   
+
+    double s(int j) {
+        double sum = 0;
+        double mtmp = m(j);
+ 
+        for (int i = 0; i < E.stroks(); i++) {
+            sum += pow((E.cell(i, j) - mtmp), 2);
+        }
+
+        sum = sum / (E.stroks() - 1);
+
+        return sqrt(sum);
+
+    }
+
+    
+    void scaling() {
+        
+        for (int j = 0; j < X.stlbs(); j++) {
+            int sum = 0;
+            double stmp = s(j);
+
+            for (int i = 0; i < E.stroks(); i++) {
+                E.cell(i, j) = E.print(i, j) / stmp;
+            }
+
+
+
+        }
+
+
+
+
+
+    }
+
+
+
+
+    void autoshkal() {
+        for (int j = 0; j < X.stlbs(); j++) {
+            double mtmp = m(j);
+            double stmp = s(j);
+            for (int i = 0; i < X.stroks(); i++) {
+                E.cell(i, j) = (X.print(i, j) - mtmp) / stmp;
+                
+            }
+            //std::cout << stmp << " / ";
+        }
+
+
+    }
+
+
+    void main_func() {
+        double eps = 1E-8;
+        Vector d;
+        Vector p;
+        
+
+        for (int h = 0; h < components; h++) {
+            Vector t = Vector(E, h); // из матрицы E берём столбец с индесом h
+
+            do {
+                p = Vector(((t.T() * E) / (t * t)).T(), 0);
+                //std::cout << p << std::endl;
+                p = Vector((p / p.evklidnorm()), 0) ;
+                
+                Vector t_old = t;
+
+                t = Vector((E * p) / (p * p), 0);
+
+                d = Vector(t_old - t, 0);
+                //std::cout << d.evklidnorm() << std::endl;
+                //std::cout << t_old - t;
+            } while (d.evklidnorm() > eps);
+            //std::cout << E;
+            E = E - (Matrix)t * p.T();
+            
+
+            T.values.push_back(t.T().values[0]);
+            T.stlb = t.T().values[0].size();
+            T.strk++;
+            P.values.push_back(p.T().values[0]);
+            P.stlb = p.T().values[0].size();
+            P.strk++;
+
+
+        }
+
+        //std::cout << T;
+        T = T.T();
+        P = P.T();
+
+    }
+
+
+
+    void print2() {
+        std::cout << X;
+    }
+
+
+
+    void print() {
+        std::cout << E; 
+    }
+    
+    void check() {
+        std::cout << "\n\n\n";
+        std::cout << T;
+        std::cout << "\n\n\n";
+        std::cout << P;
+        std::cout << "\n\n\n";
+        std::cout << T * P.T() << std::endl;
+        
+    }
+
+
+    Matrix razmahi() {
+        std::vector<std::vector<double>> tmp;
+        std::vector<double> razmahs;
+        
+        for (int i = 0; i < T.values.size(); i++) {
+            razmahs.push_back((Vector(T.T(), i).T() * (T.T() * T).inv() * Vector(T.T(), i)).values[0][0]);
+            //std::cout << Vector(T.T(), i).T() * (T.T() * T).inv() * Vector(T.T(), i);
+        }
+        tmp.push_back(razmahs);
+        //std::cout << Matrix(tmp);
+        return Matrix(tmp);
+    }
+
+
+
+    Matrix dispersion() { // сумма квадратов по строкам матрицы E
+        std::vector<std::vector<double>> tmp;
+        std::vector<double> dspr;
+        for (int i = 0; i < E.values.size(); i++) {
+            double sum = 0;
+            for (int j = 0; j < E.values[0].size(); j++) {
+                sum += pow(E.values[i][j], 2) ;
+            }
+            dspr.push_back(sum); // сохарняем сумму остатокв
+            //std::cout << Vector(T.T(), i).T() * (T.T() * T).inv() * Vector(T.T(), i);
+        }
+        tmp.push_back(dspr);
+        //std::cout << Matrix(tmp);
+        return Matrix(tmp);
+    }
+
+
+    
+    double TRV() {
+        Matrix tmp = PCA::dispersion();
+        double v0 = 0;
+        for (int i = 0; i < tmp.values[0].size(); i++) {
+            v0 += tmp.values[0][i];
+        }
+
+        v0 /= tmp.values[0].size();
+
+        return (v0 / components);
+
+    }
+
+
+    double ERV() {
+        Matrix tmp = PCA::dispersion();
+        double v0 = 0;
+        for (int i = 0; i < tmp.values[0].size(); i++) {
+            v0 += tmp.values[0][i];
+        }
+        
+        double sum = 0;
+        for (int i = 0; i < X.values.size(); i++) {
+            for (int j = 0; j < X.values[0].size(); j++) {
+                sum += pow(X.values[i][j], 2);
+                
+
+            }
+        }
+        return (1 - v0 / sum);
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+};
+
+
+
+
+
+
+
+
+
+
