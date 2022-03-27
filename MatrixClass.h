@@ -8,7 +8,7 @@
 #include <iostream>
 #include <math.h>
 
-const double EPS = 1E-9;
+const double EPS = 1E-3;
 
 
 class IndexError {
@@ -25,7 +25,19 @@ public:
 
 };
 
+class MatrixError {
+private:
+    std::string mtr_error;
 
+public:
+    MatrixError(std::string error)
+        : mtr_error(error)
+    {
+    }
+
+    const char* getError() { return MatrixError::mtr_error.c_str(); }
+
+};
 
 
 class Matrix {
@@ -99,7 +111,7 @@ class Matrix {
         // сумма матриц
         Matrix operator+(const Matrix& tmp) {
             if (this->stlb != tmp.stlb || this->strk != tmp.strk) {
-                throw IndexError("Matrix + Matrix: wrong sizes");
+                throw MatrixError("Matrix + Matrix: wrong sizes");
             }
 
             std::vector<std::vector<float>> vectmp;
@@ -119,7 +131,7 @@ class Matrix {
         // вычитание матриц
         Matrix operator-(const Matrix& tmp) {
             if (this->stlb != tmp.stlb || this->strk != tmp.strk) {
-                throw IndexError("Matrix - Matrix: wrong sizes");
+                throw MatrixError("Matrix - Matrix: wrong sizes");
             }
             std::vector<std::vector<float>> vectmp;
 
@@ -137,7 +149,7 @@ class Matrix {
         // умножение матриц
         Matrix operator*(const Matrix& tmp) const{
             if (this->stlb != tmp.strk) {
-                throw IndexError("Matrix * Matrix: wrong sizes");
+                throw MatrixError("Matrix * Matrix: wrong sizes");
             }
             std::vector<std::vector<float>> vectmp;
 
@@ -150,10 +162,17 @@ class Matrix {
                 for (int j = 0; j < tmp.stlb; j++) {
 
                     for (int k = 0; k < this->stlb; k++) {
-                        tmpsum += this->print(i, k) * tmp.print(k, j);
+                        if ( fabs(this->print(i, k) * tmp.print(k, j)) < EPS) {
+                            tmpsum += 0.;
+                        }
+                        else {
+                            tmpsum += this->print(i, k) * tmp.print(k, j);
+                        }
                     }
 
-
+                    if (fabs(tmpsum) < EPS) {
+                        tmpsum = 0;
+                    }
 
                     vectmp[i].push_back(tmpsum);
                     tmpsum = 0;
@@ -223,7 +242,7 @@ class Matrix {
                 return sum;
             }
             else {
-                throw IndexError("Matrix must be squared");
+                throw MatrixError("Matrix must be square");
             }
         }
 
@@ -233,7 +252,7 @@ class Matrix {
 
         float det() const {
             if (this->issquare() == false) {
-                throw IndexError("Matrix must be squared");
+                throw MatrixError("Matrix must be square");
             }
             else {
                 Matrix temp(this->values);
@@ -304,6 +323,171 @@ class Matrix {
 
         }
 
+        int rank(){
+
+            int i, j, k, l;
+            float r;
+            std::vector<std::vector<float>> a = this->values;
+
+
+            i = 0; j = 0;
+            while (i < this->strk && j < this->stlb) {
+                // Инвариант: минор матрицы в столбцах 0..j-1
+                //   уже приведен к ступенчатому виду, и строка
+                //   с индексом i-1 содержит ненулевой эл-т
+                //   в столбце с номером, меньшим чем j
+
+                // Ищем максимальный элемент в j-м столбце,
+                // начиная с i-й строки
+                r = 0.0;
+                for (k = i; k < this->strk; ++k) {
+                    if (fabs(a[k][j]) > r) {
+                        l = k;      // Запомним номер строки
+                        r = fabs(a[k][j]); // и макс. эл-т
+                    }
+                }
+                if (r <= EPS) {
+                    // Все элементы j-го столбца по абсолютной
+                    // величине не превосходят eps.
+                    // Обнулим столбец, начиная с i-й строки
+                    for (k = i; k < this->strk; ++k) {
+                        a[k][j] = 0.0;
+                    }
+                    ++j;      // Увеличим индекс столбца
+                    continue; // Переходим к следующей итерации
+                }
+
+                if (l != i) {
+                    // Меняем местами i-ю и l-ю строки
+                    for (k = j; k < this->stlb; ++k) {
+                        r = a[i][k];
+                        a[i][k] = a[l][k];
+                        a[l][k] = (-r); // Меняем знак строки
+                    }
+                }
+
+                // Утверждение: fabs(a[i*n + k]) > eps
+
+                // Обнуляем j-й столбец, начиная со строки i+1,
+                // применяя элем. преобразования второго рода
+                for (k = i + 1; k < this->strk; ++k) {
+                    r = (-a[k][j] / a[i][j]);
+
+                    // К k-й строке прибавляем i-ю, умноженную на r
+                    a[k][j] = 0.0;
+                    for (l = j + 1; l < this->stlb; ++l) {
+                        a[k][l] += r * a[i][l];
+                    }
+                }
+
+                ++i; ++j;   // Переходим к следующему минору
+            }
+
+            return i; // Возвращаем число ненулевых строк
+        }
+
+
+
+        // обратная матрица
+        Matrix inv()
+        {
+
+            if (this->issquare() == false) {
+                throw MatrixError("must be square matrix");
+            }
+
+            if (this->det() == 0){
+                throw MatrixError("Matrix is degenerate (Vurozhdena)");
+            }
+
+
+
+            std::vector<std::vector<float>> mtr = this->values; // копируем исходную матрицу
+            std::vector<std::vector<float>> tmp; // составим тут единичную матрицу
+
+            int n = this->values.size();
+            float num;
+            for (int i = 0; i < n; i++) {
+                std::vector<float> temp;
+                tmp.push_back(temp);
+                for (int j = 0; j < n; j++)
+                {
+                    tmp[i].push_back(0.0);
+
+                    if (i == j)
+                        tmp[i][j] = 1.0;
+                }
+            }// единичную матрицу составили
+
+
+
+
+            // методом гаусса приводим исходную к единичной матрице, при этом повторяем действия по строком с единичной
+            for (int k = 0; k < n; k++)
+            {
+                num = mtr[k][k];
+
+                for (int j = 0; j < n; j++)
+                {
+                    mtr[k][j] /= num;
+                    tmp[k][j] /= num;
+                }
+
+                for (int i = k + 1; i < n; i++)
+                {
+                    num = mtr[i][k];
+
+                    for (int j = 0; j < n; j++)
+                    {
+                        mtr[i][j] -= mtr[k][j] * num;
+                        tmp[i][j] -= tmp[k][j] * num;
+                        
+                    }
+                }
+            }
+
+            for (int k = n - 1; k > 0; k--)
+            {
+                for (int i = k - 1; i >= 0; i--)
+                {
+                    num = mtr[i][k];
+
+                    for (int j = 0; j < n; j++)
+                    {
+                        mtr[i][j] -= mtr[k][j] * num;
+                        tmp[i][j] -= tmp[k][j] * num;
+                        
+
+
+                    }
+                }
+            }
+
+
+
+
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    if (fabs(tmp[i][j]) < EPS) {
+                        tmp[i][j] = 0;
+                    }
+                }
+            }
+
+
+            return Matrix(tmp);
+        }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -334,7 +518,7 @@ Matrix operator*(int num, const Matrix& tmp) {
 
 Matrix adamar(const Matrix& tmp1, const Matrix& tmp2) {
     if (tmp1.stlb != tmp2.stlb || tmp1.strk != tmp2.strk) {
-        throw IndexError("Matrix adamar: wrong sizes");
+        throw MatrixError("Matrix adamar: wrong sizes");
     }
     std::vector<std::vector<float>> vectmp;
 
@@ -435,7 +619,7 @@ public:
     
     float operator*(const Vector& tmp) {
         if (this->strk != tmp.strk) {
-            throw IndexError("vector * vector: wrong sizes");
+            throw MatrixError("vector * vector: wrong sizes");
         }
         
         float sum = 0;
@@ -544,7 +728,7 @@ public:
 
     diagonal(Matrix mtr) {
         if (mtr.issquare() != true) {
-            throw IndexError("diagonal: matrix must be square");
+            throw MatrixError("diagonal: matrix must be square");
         }
         for (int i = 0; i < mtr.stroks(); i++) {
             for (int j = 0; j < mtr.stroks(); j++) {
@@ -583,7 +767,7 @@ public:
 
     float& cell(int i, int j) {
         if (i > j) {
-            throw IndexError("This value is constant");
+            throw MatrixError("This value is constant");
         }
         else {
             return Matrix::cell(i, j);
@@ -614,7 +798,7 @@ public:
 
     float& cell(int i, int j) {
         if (j > i) {
-            throw IndexError("This value is constant");
+            throw MatrixError("This value is constant");
         }
         else {
             return Matrix::cell(i, j);
@@ -716,7 +900,7 @@ public:
 
 Угол между векторами  (done)   angle(v1, v2)
 
-Ранг Матрицы (с помощью алгоритма Гаусса)   
+Ранг Матрицы (с помощью алгоритма Гаусса)   (done) rank()
 
 Обратная матрица (если существует)   
 
