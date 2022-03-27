@@ -7,6 +7,11 @@
 #include <stdio.h>
 #include <iostream>
 #include <math.h>
+#include <fstream>
+#include <sstream>
+#include <cstdlib>
+#include <algorithm>
+
 
 const double EPS = 1E-3;
 
@@ -38,6 +43,29 @@ public:
     const char* getError() { return MatrixError::mtr_error.c_str(); }
 
 };
+
+
+
+
+class FileError {
+private:
+    std::string fl_error;
+
+public:
+    FileError(std::string error)
+        : fl_error(error)
+    {
+    }
+
+    const char* getError() { return FileError::fl_error.c_str(); }
+
+};
+
+
+
+
+
+
 
 
 class Matrix {
@@ -481,6 +509,69 @@ class Matrix {
         }
 
 
+        int write(std::string filename)
+        {
+            std::ofstream out(filename, std::ios::binary);    //Ставим режим "бинарный файл"
+            if (!out) {
+                throw FileError("Error while openning file to write");
+            }
+            out.write((char*)&this->strk, sizeof(int));       //Записываем в файл колво столбцов
+            out.write((char*)&this->stlb, sizeof(int));       //Записываем в файл колво строк
+            for (int i = 0; i < this->strk; i++) {
+                for (int j = 0; j < this->stlb; j++) {
+                    out.write((char*)&this->values[i][j], sizeof(float));
+                }
+
+            }
+            out.close();
+            return 0;
+        }
+
+        
+
+
+        int read(std::string filename)
+        {
+            std::ifstream in(filename, std::ios::binary);            //Ставим режим "бинарный файл"
+            if (!in) {
+                throw FileError("Error while openning file to read");
+            }
+
+            for (int i = 0; i < this->strk; i++) {
+                this->values[i].clear();
+            }
+            this->values.clear(); // будет ли утечка памяти если массив двойной?
+
+            
+
+            
+            in.read((char*)&this->strk, sizeof(int));        //
+            if (!in) throw FileError("wrong file");
+            in.read((char*)&this->stlb, sizeof(int));        //
+            if (!in) throw FileError("wrong file");
+
+
+
+            for (int i = 0; i < this->strk; i++) {
+                std::vector<float> temp;
+                this->values.push_back(temp);
+                for (int j = 0; j < this->stlb; j++) {
+                    float tmp;
+                    in.read((char*)&tmp, sizeof(float));
+                    if (!in) throw FileError("not enough elements or wrong file");
+                    // если элемент не был прочитан или прочитан неправильно или элементы кончились
+                    // выдаём ошибку
+
+                    this->values[i].push_back(tmp);
+                }
+
+            }
+            in.close();
+            return 0;
+
+        
+        }
+
 
 
 
@@ -495,7 +586,7 @@ class Matrix {
         friend Matrix operator*(int num, const Matrix& tmp);
         friend Matrix adamar(const Matrix& tmp1, const Matrix& tmp2);
         friend std::ostream& operator<< (std::ostream& out, const Matrix& mtr);
-
+        friend std::istream& operator>> (std::istream& in, Matrix& mtr); // доделать
 };
 
 
@@ -538,58 +629,136 @@ Matrix adamar(const Matrix& tmp1, const Matrix& tmp2) {
 
 std::ostream& operator<< (std::ostream& out, const Matrix& mtr)
     {
-    float max = mtr.values[0][0];
-    float min = mtr.values[0][0];
     int size = 0;
     
     
 
-    size = 6;
+    size = 7;
 
 
     out.setf(std::ios::left);
-    out << std::setprecision(6);
-    if (mtr.strk == 1) {
-        out << "( ";
-        for (int i = 0; i < mtr.stlb; i++) {
+    out << std::setprecision(5);
+
+
+    for (int i = 0; i < mtr.stlb - 1; i++) {
+        out << std::setfill(' ') << std::setw(size);
+        out << mtr.print(0, i) << " ";
+    }
+    out << mtr.print(0, mtr.stlb -1) << "\n";
+
+    for (int j = 1; j < mtr.strk - 1; j++) {
+        for (int i = 0; i < mtr.stlb - 1; i++) {
             out << std::setfill(' ') << std::setw(size);
-            out << mtr.print(0, i) << " ";
+            out << mtr.print(j, i) << " ";
         }
-        out << ")\n";
-
-
+        out << mtr.print(j, mtr.stlb - 1) << "\n";
     }
 
-    else {
-
-        out << "/ ";
-        for (int i = 0; i < mtr.stlb; i++) {
-            out << std::setfill(' ') << std::setw(size);
-            out << mtr.print(0, i) << " ";
-        }
-        out << "\\ \n";
-
-        for (int j = 1; j < mtr.strk - 1; j++) {
-            out << "| ";
-            for (int i = 0; i < mtr.stlb; i++) {
-                out << std::setfill(' ') << std::setw(size);
-                out << mtr.print(j, i) << " ";
-            }
-            out << "|\n";
-        }
-
-        out << "\\ ";
-        for (int i = 0; i < mtr.stlb; i++) {
-            out << std::setfill(' ') << std::setw(size);
-            out << mtr.print(mtr.strk - 1, i) << " ";
-        }
-        out << "/ \n";
-
+    for (int i = 0; i < mtr.stlb - 1; i++) {
+        out << std::setfill(' ') << std::setw(size);
+        out << mtr.print(mtr.strk - 1, i) << " ";
     }
+    out << mtr.print(mtr.strk-1, mtr.stlb - 1) << "\n";
 
     return out;
 
     }
+
+
+
+
+std::istream& operator>> (std::istream& in, Matrix& mtr) {
+
+    std::string line;
+    for (int i = 0; i < mtr.strk; i++) {
+        mtr.values[i].clear();
+    }
+    mtr.values.clear();
+    
+    std::vector<std::vector<float>> vec;
+
+    int strk = 0;
+    int stlb = 0;
+    int tmpstlb = 0;
+    std::string tmp;
+
+
+    while (getline(in, line)) {
+        std::replace(line.begin(), line.end(), ',', '.'); // меняет запятые на точки
+        std::stringstream ss;
+        ss << line;
+        std::vector<float> temp;                          // чтоб формат float с . и , читались
+        vec.push_back(temp);
+
+
+        while (!ss.eof()) {
+            ss >> tmp;
+            if (strk == 0) { // если заполняется первая строка 
+                stlb += 1; 
+                tmpstlb += 1;
+            }
+            else {
+                tmpstlb += 1;
+            }
+            vec[strk].push_back(std::stof(tmp));
+        }
+        if (tmpstlb != stlb) {
+            throw FileError{ "file have wrong sizes to be matrix" };
+        }
+
+        tmpstlb = 0;
+
+        strk += 1;
+
+    }
+
+
+
+    /*
+    std::string line;
+    std::string tmp;
+    while (getline(inf, line)) {
+        std::replace(line.begin(), line.end(), ',', '.');
+        std::stringstream ss;
+        ss << line;
+        while (!ss.eof()) {
+            ss >> tmp;
+            std::cout << std::stof(tmp);
+        }
+
+        //std::cout << line;
+        tmp = "";
+    }
+    */
+
+
+    mtr.stlb = stlb;
+    mtr.strk = strk;
+    mtr.values = vec;
+
+
+
+    return in;
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
